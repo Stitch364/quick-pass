@@ -1,0 +1,71 @@
+<!doctype html>
+<title>IPv6 零信任快传网盘</title>
+<meta charset="utf-8">
+<style>
+    body {
+        font-family: Arial,serif;
+        margin: 10%;
+    }
+
+    .center {
+        text-align: center; /* 让 h2 文字居中 */
+    }
+
+    .center-box {
+        margin: 20px auto; /* 关键：水平居中 */
+        border: 3px dashed #999;
+        width: 350px;
+        height: 180px;
+    }
+</style>
+<div class="center">
+    <h2>拖文件到框 → 扫码下载（IPv6）</h2>
+    <div id="box"  class="center-box" style="border:3px dashed #999;width:350px;height:180px;"></div>
+
+    <a id="info" href=""></a>
+    <canvas id="qr" width="200" height="200" style="margin-top:20px;"></canvas>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/qr-creator/dist/qr-creator.min.js"></script>
+
+
+<script>
+    // 获取拖拽区域元素
+    const box=document.getElementById('box');
+
+    // 阻止拖拽进入时的默认行为
+    box.ondragover=e=>e.preventDefault();
+
+    // 处理文件拖拽释放事件
+    box.ondrop=async e=>{
+        // 阻止默认行为，防止浏览器打开文件
+        e.preventDefault();
+
+        // 获取拖拽的第一个文件
+        const f=e.dataTransfer.files[0];
+
+        // 创建表单数据对象，用于上传文件
+        const fd=new FormData();
+        fd.append('file',f);
+
+        // 显示上传状态
+        document.getElementById('info').innerText='上传中...';
+
+        // 发送文件上传请求到服务器
+        const r=await fetch('/up',{method:'POST',body:fd}).then(r=>r.json());
+
+        // 显示返回的下载链接
+        document.getElementById('info').innerText='链接（仅 IPv6 可访问）：'+r.link;
+        document.getElementById('info').href = r.link;
+
+        console.log('link:', r.link);
+        // 使用 QRCode 库生成二维码并显示在 canvas 上
+            QRCreator.render({
+            text: r.link,
+            radius: 0.5, // 二维码圆角
+            ecLevel: 'H', // 容错级别
+            fill: '#000', // 二维码颜色
+            background: '#fff', // 背景色
+            size: 200
+        }, document.querySelector('#qr'));
+    };
+</script>

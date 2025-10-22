@@ -1,0 +1,22 @@
+<!doctype html>
+<title>IPv6 零信任快传网盘</title>
+<meta charset="utf-8">
+<style>body{font-family:Arial;margin:10%;}</style>
+<h2>拖文件到框 → 扫码下载（IPv6）</h2>
+<div id="box" style="border:3px dashed #999;width:350px;height:180px;"></div>
+<p id="info"></p>
+<canvas id="qr" style="margin-top:20px;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/qr-creator/dist/qr-creator.min.js"></script>
+<script>
+    const box=document.getElementById('box');
+    box.ondragover=e=>e.preventDefault();
+    box.ondrop=async e=>{
+        e.preventDefault();
+        const f=e.dataTransfer.files[0];
+        const fd=new FormData(); fd.append('file',f);
+        document.getElementById('info').innerText='上传中...';
+        const r=await fetch('/up',{method:'POST',body:fd}).then(r=>r.json());
+        document.getElementById('info').innerText='链接（仅 IPv6 可访问）：'+r.link;
+        QRCreator.render({text:r.link},document.querySelector('#qr'));
+    };
+</script>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <title>IPv6 零信任快传网盘</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 40px;
+            background: #f2f4f8;
+            color: #333;
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-box {
+            border: 2px dashed #c3c3c3;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            background: #fff;
+            transition: border-color .3s, background-color .3s;
+            cursor: pointer;
+        }
+        .upload-box:hover {
+            border-color: #409eff;
+            background-color: #f9fcff;
+        }
+        .upload-box.dragover {
+            border-color: #409eff;
+            background-color: #f3f9ff;
+        }
+        .upload-icon {
+            font-size: 48px;
+            color: #909399;
+            margin-bottom: 10px;
+        }
+        .upload-text {
+            font-size: 16px;
+            color: #606266;
+            margin: 0;
+        }
+        .upload-hint {
+            font-size: 14px;
+            color: #a8a8a8;
+            margin-top: 8px;
+        }
+        #fileElem {
+            display: none;
+        }
+        .btn-select {
+            margin-top: 16px;
+            padding: 10px 24px;
+            font-size: 14px;
+            color: #fff;
+            background-color: #409eff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color .3s;
+        }
+        .btn-select:hover {
+            background-color: #66b1ff;
+        }
+        #info {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #606266;
+        }
+        #qr {
+            display: block;
+            margin: 20px auto 0;
+        }
+    </style>
+</head>
+<body>
+<h2>IPv6 零信任快传网盘</h2>
+
+<!-- 上传区域：点击选择文件 + 拖拽上传 -->
+<div class="upload-box" id="uploadBox">
+    <input type="file" id="fileElem" multiple />
+    <div class="upload-icon">☁</div>
+    <p class="upload-text">拖拽文件到此处 或 点击选择</p>
+    <p class="upload-hint">支持多文件，单文件 ≤ 50 MB</p>
+    <button class="btn-select" id="fileSelectBtn">选择文件</button>
+</div>
+
+<!-- 结果展示 -->
+<p id="info"></p>
+<canvas id="qr" style="display:none;"></canvas>
+
+<!-- QRCode 生成库 -->
+<script src="https://cdn.jsdelivr.net/npm/qr-creator/dist/qr-creator.min.js"></script>
+<script>
+    // 获取 DOM 元素
+    const uploadBox = document.getElementById('uploadBox');
+    const fileElem = document.getElementById('fileElem');
+    const fileSelectBtn = document.getElementById('fileSelectBtn');
+    const info = document.getElementById('info');
+    const qr = document.getElementById('qr');
+
+    // 选择文件按钮点击 → 触发隐藏 input
+    fileSelectBtn.addEventListener('click', () => fileElem.click());
+
+    // 选择文件后自动上传
+    fileElem.addEventListener('change', () => {
+        const files = fileElem.files;
+        if (files.length === 0) return;
+        uploadFiles(files);
+    });
+
+    // 拖拽相关事件
+    uploadBox.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadBox.classList.add('dragover');
+    });
+    uploadBox.addEventListener('dragleave', () => {
+        uploadBox.classList.remove('dragover');
+    });
+    uploadBox.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadBox.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length === 0) return;
+        uploadFiles(files);
+    });
+
+    // 上传文件函数
+    async function uploadFiles(files) {
+        info.innerText = '上传中...';
+        qr.style.display = 'none';
+
+        const formData = new FormData();
+        // 多文件循环添加（后端目前单文件，留扩展）
+        for (let i = 0; i < files.length; i++) {
+            formData.append('file', files[i]);
+        }
+
+        try {
+            const res = await fetch('/up', {
+                method: 'POST',
+                body: formData
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const result = await res.json();
+
+            info.innerText = '链接（IPv6 仅）：' + result.link;
+            // 生成二维码
+            QRCreator.render({
+                text: result.link,
+                radius: 0.25,
+                ecLevel: 'M',
+                fill: '#ff4083',
+                background: '#f61111',
+                size: 256
+            }, qr);
+            qr.style.display = 'block';
+
+        } catch (err) {
+            info.innerText = '上传失败：' + err.message;
+            qr.style.display = 'none';
+        }
+    }
+</script>
+</body>
+</html>
