@@ -19,6 +19,7 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/url"
@@ -105,7 +106,13 @@ func uploadHandler(c *gin.Context) {
 		c.String(http.StatusBadRequest, "Missing file")
 		return
 	}
-	defer file.Close()
+	defer func(file multipart.File) {
+		err := file.Close()
+		if err != nil {
+			log.Printf("Failed to close file: %v", err)
+			return
+		}
+	}(file)
 
 	// 检查文件大小是否超过限制
 	size := header.Size
