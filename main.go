@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -38,9 +39,11 @@ var (
 
 // ========== 2. 内存实体 ==========
 type fileMeta struct {
-	data  []byte    // 文件内容
-	left  int32     // 剩余下载次数
-	expAt time.Time // 到期即焚
+	data     []byte    // 文件内容
+	fileName string    // 文件名
+	size     int64     //文件大小
+	left     int32     // 剩余下载次数
+	expAt    time.Time // 到期即焚
 }
 
 var (
@@ -139,11 +142,13 @@ func uploadHandler(c *gin.Context) {
 	hash := sha256.Sum256(data)
 	hashStr := hex.EncodeToString(hash[:])
 
-	// 创建文件元数据结构，包含文件数据、剩余下载次数和过期时间
+	// 创建文件元数据结构，包含文件数据、文件名、剩余下载次数和过期时间
 	meta := &fileMeta{
-		data:  data,
-		left:  int32(*maxTimes),                                         // 设置最大下载次数
-		expAt: time.Now().Add(time.Duration(*ttlMinutes) * time.Minute), // 设置过期时间
+		data:     data,
+		fileName: header.Filename,                                          // 添加文件名
+		size:     size,                                                     //文件大小
+		left:     int32(*maxTimes),                                         // 设置最大下载次数
+		expAt:    time.Now().Add(time.Duration(*ttlMinutes) * time.Minute), // 设置过期时间
 	}
 	// 将文件元数据存储到并发安全的map中，以哈希值作为key
 	store.Store(hashStr, meta)
@@ -164,9 +169,8 @@ func uploadHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"file_name": header.Filename,
 		"file_size": size,
-		//"file_format":,
-		"link": link,
-		"qr":   "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
+		"link":      link,
+		"qr":        "data:image/png;base64," + base64.StdEncoding.EncodeToString(png),
 	})
 }
 
@@ -207,6 +211,10 @@ func downloadHandler(c *gin.Context) {
 	currentMB -= int64(len(meta.data))
 	memMutex.Unlock()
 
+	//将文件名保存到头部
+	encodedName := url.QueryEscape(meta.fileName)
+	c.Header("Content-Disposition",
+		`attachment; filename*=UTF-8''`+encodedName)
 	// 返回文件数据给客户端
 	c.Data(http.StatusOK, "application/octet-stream", meta.data)
 }
@@ -224,10 +232,22 @@ func selfSign() (certFile, keyFile string) {
 	}
 	certDER, _ := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	certOut, _ := os.Create("cert.pem")
-	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	certOut.Close()
+	err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	if err != nil {
+		return "", ""
+	}
+	err = certOut.Close()
+	if err != nil {
+		return "", ""
+	}
 	keyOut, _ := os.Create("key.pem")
-	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
-	keyOut.Close()
+	err = pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
+	if err != nil {
+		return "", ""
+	}
+	err = keyOut.Close()
+	if err != nil {
+		return "", ""
+	}
 	return "cert.pem", "key.pem"
 }
